@@ -1,2 +1,3 @@
-# VnRobustaELAI
-Scripts for ELAI analysis of VN Robusta coffee accessions
+# Scripts for ELAI validation and application on VN Robusta
+
+*Note: missing scripts for variant calling and validation of elai results*
