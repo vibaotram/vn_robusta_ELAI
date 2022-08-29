@@ -1,0 +1,11 @@
+*.html
+*.RData
+*.RDS
+elai_TR/elai/*
+genetic_structure/snmf_random_10perc_SNPs/*
+plots/*
+validate_elai/simulate_hybrids/*
+validate_elai/simulated_source/*
+validate_elai/all_tests/*
+
+
