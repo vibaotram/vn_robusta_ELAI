@@ -4,8 +4,10 @@
 elai_TR/elai/*
 genetic_structure/snmf_random_10perc_SNPs/*
 plots/*
-validate_elai/simulate_hybrids/*
-validate_elai/simulated_source/*
+validate_elai/simulate_hybrids/simulated_hybrids/*
+validate_elai/simulate_source/simulated_source/*
+validate_elai/simulate_source/snmf_chr1/*
+validate_elai/simulate_source/snmf_chr1_100kSNPs/*
 validate_elai/all_tests/*
 
 
