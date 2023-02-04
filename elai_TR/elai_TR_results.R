@@ -7,7 +7,6 @@ library(LEA)
 library(vcfR)
 library(tidyverse)
 library(data.table)
-library(dplyr)
 library(GenomicRanges)
 library(IRanges)
 library(karyoploteR)
@@ -178,7 +177,7 @@ tiff(file.path(plot_dir, paste0(id, ".tiff")),
 par(mar = c(2,2,2,2))
 gkp <- plotKaryotype(genome = genome_GR, plot.type = 6,
                      plot.params = pp1) 
-kpDataBackground(gkp, data.panel ="ideogram", color = "grey90")
+kpDataBackground(gkp, data.panel ="ideogram", color = "grey70")
 kpAddBaseNumbers(gkp, tick.dist = 1e7)
 for (g in 1:length(groups)) {
   if (g == 1) {
@@ -192,8 +191,8 @@ for (g in 1:length(groups)) {
 }
 kpAxis(gkp, side = 2, data.panel=1, cex = 0.7)
 legend("right", #x = 0.9, y = 0.4, #"bottomright", #  yjust = .5, xjust = 0, # 
-       title = "ancestry", legend = c(gsub("group_", "", names(group_col)), "undetermined"), 
-       fill = c(group_col, "grey90"), bty = "n", xjust = 0)
+       title = "ancestry", legend = c(gsub("group_", "", names(group_col[c(1,4)])), "undetermined"), 
+       fill = c(group_col[c(1,4)], "grey70"), bty = "n", xjust = 0)
 dev.off()
 
 # plot all genomes together
@@ -201,8 +200,8 @@ pp2 <- getDefaultPlotParams(plot.type=7)
 pp2$data1outmargin <- 0
 # pp2$data1height <- 5
 # pp2$data2height <- 5
-pp2$topmargin <- 40
-# pp2$bottommargin <- 20
+pp2$topmargin <- 20
+# pp2$bottommargin <- 40
 pp2$leftmargin <- .07
 pp2$rightmargin <- .2
 pp2$ideogramlateralmargin <- 0.003
@@ -211,7 +210,9 @@ inds <- unique(all_windows$individual) %>% as.character() %>% str_sort(numeric =
 
 tiff(file.path(plot_dir, "all_TRs.tiff"),
      width = 20, heigh = 8, unit = "in", res = 1000)
-par(mar = c(2,2,2,2))
+pdf(file.path(plot_dir, "all_TRs_rv.pdf"),
+     width = 20, heigh = 12)
+par(mar = c(4,2,2,2))
 gkp <- plotKaryotype(genome = genome_GR, plot.type = 7,
                      plot.params = pp2)
 kpDataBackground(gkp, data.panel ="ideogram", color = "white")
@@ -245,7 +246,7 @@ for (id in 1:length(inds)) {
   # kpPlotRegions(gkp, data = all_windows_large, data.panel = "ideogram", col = "grey20", avoid.overlapping = T, r0 = ra, r1 = rz)
   # kpPlotRegions(gkp, data = all_windows_small, data.panel = "ideogram", col = "orange3", avoid.overlapping = T)
 }
-legend("right", #x = 0.9, y = 0.4, #"bottomright", #  yjust = .5, xjust = 0, # 
+legend("bottom", horiz = T, #x = 0.9, y = 0.4, #"bottomright", #  yjust = .5, xjust = 0, # 
        title = "ancestry", legend = c(gsub("group_", "", names(group_col)), "undetermined"), 
        fill = c(group_col, "grey90"), bty = "n", xjust = 0, cex = 1.2)
 dev.off()
@@ -352,3 +353,87 @@ ggplot(data = africa) +
   theme(legend.box.margin = margin(l = 20), 
         legend.key.size = unit(14, "pt"),
         legend.key.height = unit(15, "pt"))
+
+
+## combined figure
+
+pp3 <- getDefaultPlotParams(plot.type=7)
+pp3$data1outmargin <- 0
+# pp2$data1height <- 5
+# pp2$data2height <- 5
+pp3$topmargin <- 15
+pp3$bottommargin <- 40
+pp3$leftmargin <- .05
+pp3$rightmargin <- .25
+pp3$ideogramlateralmargin <- 0.003
+
+colnames(sum_TRs) <- gsub("ancestry ", "", colnames(sum_TRs))
+label_plot <- sum_TRs %>% 
+  as.data.frame() %>% 
+  mutate(across(everything(), ~ sprintf("%.1f%%", . * 100))) %>% 
+  rownames_to_column("id") %>% 
+  rowwise() %>% 
+  mutate(label = paste(c(ER, OB, AG ,undetermined)[which(c(ER, OB, AG ,undetermined) > 0.1)],
+                       c("ER", "OB", "AG", "undetm.")[which(c(ER, OB, AG ,undetermined) > 0.1)], 
+                       collapse = ", ")) %>% 
+  mutate(label = paste0("(", label, ")")) %>% 
+  pull(label) %>% rev()
+
+tiff(file.path(plot_dir, "all_TRs_rv.tiff"),
+     width = 24, heigh = 12, unit = "in", res = 1000)
+# pdf(file.path(plot_dir, "all_TRs_rv.pdf"),
+#     width = 25, heigh = 12)
+par(mar = c(4,2,1,4))
+gkp <- plotKaryotype(genome = genome_GR, plot.type = 7,
+                     plot.params = pp3, cex = 1.8)
+kpDataBackground(gkp, data.panel ="ideogram", color = "white")
+kpAddBaseNumbers(gkp, tick.dist = 1e7)
+for (id in 1:length(inds)) {
+  if (id == 1) {
+    ra <- 0
+    rz <- 1/length(inds)-.02
+  } else {
+    ra <- rz +.02
+    rz <- rz + 1/length(inds)
+  }
+  all_windows_ind <- all_windows[all_windows$individual == inds[id]]
+  all_windows_large <- all_windows_ind[width(all_windows_ind) > 1e6,]
+  all_windows_small <- all_windows_ind[width(all_windows_ind) < 1e6,]
+  groups <- colnames(mcols(all_windows))[colnames(mcols(all_windows)) != "individual"]
+  
+  # lb <- grep(gsub("m", "", inds[id]), label_plot, value = T)
+  id_name <- gsub("m", "", inds[id])
+  lb <- bquote(bold(.(id_name)) ~ .(label_plot[id]))
+  
+  kpBars(gkp, data = genome_GR, 
+         y0 = rep(0, length(genome_GR)), y1 = rep(1, length(genome_GR)), 
+         col = "gray70", border = NA, r0 = ra, r1 = rz)
+  kpAxis(gkp, side = 1, data.panel=1, cex = 1, r0 = ra, r1 = rz)
+  # kpText(gkp, data = NULL, chr=seqnames(genome_GR)[length(genome_GR)], 
+  #        x=width(genome_GR)[length(genome_GR)] + 7e7,
+  #        y=0.5, 
+  #        labels = lb, 
+  #        r0 = ra, r1 = rz)
+  kpAddLabels(gkp, labels = lb, side = "right", r0 = ra, r1 = rz, cex = 1.8)
+  for (g in 1:length(groups)) {
+    if (g == 1) {
+      ga <- 0
+      gz <- mcols(all_windows_large)[,groups[g]]
+    } else {
+      ga <- gz
+      gz <- gz+mcols(all_windows_large)[,groups[g]]
+    }
+    kpBars(gkp, data = all_windows_large, 
+           y0 = ga, y1 = gz, 
+           col = group_col[groups[g]], border = NA, r0 = ra, r1 = rz)
+  }
+  # kpPlotRegions(gkp, data = all_windows_large, data.panel = "ideogram", col = "grey20", avoid.overlapping = T, r0 = ra, r1 = rz)
+  # kpPlotRegions(gkp, data = all_windows_small, data.panel = "ideogram", col = "orange3", avoid.overlapping = T)
+}
+legend("bottom", horiz = T, #x = 0.9, y = 0.4, #"bottomright", #  yjust = .5, xjust = 0, # 
+       title = "ancestry", 
+       legend = c(gsub("group_", "", names(group_col[-c(3,5)])), "undetermined"), 
+       x.intersp = 0.2, text.width = 0.03,
+       fill = c(group_col[-c(3,5)], "grey70"), bty = "n", 
+       xjust = 0, yjust = -0.1, cex = 1.5)
+dev.off()
