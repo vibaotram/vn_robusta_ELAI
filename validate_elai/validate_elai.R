@@ -5,8 +5,11 @@ library(Metrics)
 library(tidyverse)
 library(huxtable)
 
+## import true dosage
 true_files <- list.files(path = "./simulate_hybrids", pattern = "true",
                          full.names = T, recursive = T)
+
+## assign dosage = 0 for ancestry group
 true_dosage <- do.call(rbind, lapply(true_files, function(f){
   ind <- gsub("(true_inference_|\\.tsv)", "", basename(f))
   df <- fread(f, header = T, sep = "\t", data.table = F)
@@ -22,11 +25,12 @@ true_dosage <- do.call(rbind, lapply(true_files, function(f){
   return(df)
 }))
 
+## plot true dosage
 ggplot(true_dosage) +
   facet_grid(rows = vars(individual)) +
   geom_line(aes(x = pos, y = true_dosage, color = ancestry))
 
-
+## define introgression tracts
 true_window <- do.call(rbind, lapply(true_files, function(f){
   ind <- gsub("(true_inference_|\\.tsv)", "", basename(f))
   df <- fread(f, header = T, sep = "\t", data.table = F)
@@ -45,38 +49,12 @@ true_window <- do.call(rbind, lapply(true_files, function(f){
   return(df)
 }))
 
+## import elai results
 elai_results <- list.files(path = "./all_tests", pattern = "local_dosage",
                            full.names = T, recursive = T)
 
-elai_corr <- do.call(rbind, lapply(elai_results, function(f) {
-  print(which(elai_results == f))
-  param <- basename(dirname(f))
-  c <- gsub("(c|_mg.+)", "", param)
-  mg <- gsub(".+_mg", "", param)
-  snp <- basename(dirname(dirname(f)))
-  df <- fread(f, header = T, data.table = F)
-  df <- df %>% 
-    rename(id = rs) %>% 
-    mutate(pos = as.numeric(gsub("CC1_8_Chr01_", "", id)))
-  # colnames(df)[1] <- "id"
-  # df <- merge(df, true_dosage, 
-  #             by = c("id", "pos", "ancestry", "individual"), 
-  #             all.x = T)
-  df <- left_join(df, true_dosage, by = c("id", "ancestry", "individual", "pos"))
-  df %>% 
-    # filter(ancestry != "group_D") %>% 
-    group_by(individual, ancestry) %>% 
-    summarise(correlation = cor(dosage, true_dosage), .groups = "drop") %>% 
-    group_by(individual) %>% 
-    summarise(mean(correlation**2, na.rm = T))
-  eva <- df %>% 
-    group_by(individual, pos) %>% 
-    summarise(correlation = cor(true_dosage, dosage), .groups = "drop_last") %>% 
-    summarise(avg_cor = mean(correlation)) %>% 
-    mutate(c = c, mg = mg, snp = snp)
-  return(eva)
-}))
 
+## calculate correlation and rmse
 elai_val <- lapply(elai_results, function(f) {
   print(which(elai_results == f))
   snp <- basename(dirname(dirname(f)))
@@ -94,13 +72,8 @@ elai_val <- lapply(elai_results, function(f) {
     all <- inner_join(tds, ds, by = c("pos", "ancestry", "individual")) %>% 
       # filter(!is.na(window)) %>%
       mutate(true_dosage = ifelse(is.na(true_dosage), 0, true_dosage))
-    # cor <- all %>%  
-    #   mutate(dif = abs(dosage - true_dosage)) %>% 
-    #   group_by(id) %>% 
-    #   summarise(acc = 1 - sum(dif), .group = "drop") %>% 
-    #   summarise(mean_acc = mean(acc))
     cor <- all %>%
-      filter(ancestry == "group_ER") %>%
+      group_by(pos) %>% 
       summarise(corr = cor(dosage, true_dosage), .groups = "drop") %>%
       summarise(cor = mean(corr, na.rm = T)) %>%
       mutate(snp = snp, c = c, mg = mg, individual = i)
@@ -113,16 +86,12 @@ elai_val <- lapply(elai_results, function(f) {
     return(list(correlation = cor, rmse =rmse))
   })
   cor <- do.call(rbind, lapply(val, function(x) x$correlation))
-  # cor %>% 
-  #   group_by(id) %>% 
-  #   summarise(cor_pos = mean(corr)) %>% 
-  #   summarise(cor = mean(cor_pos))
   rmse <- do.call(rbind, lapply(val, function(x) x$rmse))
   return(list(correlation = cor, rmse = rmse))
 })
 elai_cor <- do.call(rbind, lapply(elai_val, function(x) x$correlation))
 
-
+## graphs
 plot_dir <- "../plots/validate_elai"
 
 
