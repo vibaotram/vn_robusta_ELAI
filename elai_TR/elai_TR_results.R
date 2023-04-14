@@ -18,11 +18,12 @@ library(rnaturalearthdata)
 library(bstfun)
 library(gt)
 library(gridExtra)
+sourceCpp("./elai2GR.cpp")
 
 group_col <- c("#30123BFF", "#28BBECFF", "#A2FC3CFF", "#FB8022FF", "#7A0403FF")
 names(group_col) <- c("group_ER", "group_OB", "group_C", "group_AG", "group_D")
 
-## functions to plot raw ELAI results
+## functions to plot raw ELAI results and return dosage in data.frame
 plot_elai <- function(snakedir, chrom, groups, plot_path = NULL) {
   snp <- c("all", "even")
   all_dosage <- do.call(rbind, lapply(snp, function(s) {
@@ -69,11 +70,48 @@ plot_elai <- function(snakedir, chrom, groups, plot_path = NULL) {
   return(invisible(all_dosage))
 }
 
-## function to merge the raw ELAI results and convert to GR object, for each chromosome
+## function to determine certainty of elai dosage
+rounding <- function(x) {
+  n <- sapply(x, function(i) {
+    if (i < 0.1) {
+      i <- 0
+    } else if (i > 0.4 && i < .6) {
+      i <- 0.5
+    } else if (i > 0.9) {
+      i <- 1
+    } else {
+      i <- NA
+    }
+  }, USE.NAMES = F, simplify = T)
+  return(n)
+}
+
+## function to merge the raw ELAI results and convert to GR object
+elai_GR <- function(all_dosage, gap = 1e6){
+  # rounding admixture
+  all_dosage <- all_dosage %>% 
+    mutate(dosage = rounding(dosage)) %>% 
+    arrange(snp, pos)
+  com_dosage <- reshape2::dcast(all_dosage, ... ~ snp, 
+                                value.var = "dosage")
+  # remove ambiguous positions
+  com_dosage <- na.omit(com_dosage)
+  # for each individual and each ancestry, 
+  # retain positions that have equal admixture
+  fin_dosage <- com_dosage %>% 
+    group_by(individual, ancestry) %>% 
+    arrange(pos) %>% 
+    rowwise() %>% 
+    filter(all == even)
+  elai_GR_list <- dosage2GR(fin_dosage = fin_dosage, gap_length = gap)
+  return(elai_GR_list)
+}
+
+## function to rename groups, then merge raw ELAI results, and create GR of the final dosage
 final_elai <- function(snakedir, chrom, groups, plot_path) {
   dose <- plot_elai(snakedir, chrom, groups, plot_path)
-  # gr <- elai_GR(dose)
-  # return(gr)
+  gr <- elai_GR(dose)
+  return(gr)
 }
 
 plot_dir <- "../plots/elai_tr"
@@ -81,12 +119,11 @@ dir.create(plot_dir, showWarnings = F)
 
 snakedir <- "./elai"
 
-## in each chromosome, use snmf results to rename groups, then plot the raw ELAI results and create GR of the final dosage
+## in each chromosome, use snmf results to identify group names, then create GR of the final dosage
 chr <- "CC1.8.Chr01"
 get_snmf(snakedir = snakedir, chrom = chr)
 group_id <- c("group_C", "group_AG", "group_OB", "group_D", "group_ER")
-dose_chr1 <- plot_elai(snakedir, chr, group_id, plot_path = file.path(plot_dir, "raw_chr1.tiff"))
-elai_GR1 <- elai_GR(dose_chr1)
+elai_GR1 <- final_elai(snakedir, chr, group_id, plot_path = file.path(plot_dir, "raw_chr1.tiff"))
 
 chr <- "CC1.8.Chr02"
 get_snmf(snakedir = snakedir, chrom = chr)
@@ -156,7 +193,7 @@ genome_GR <- GRanges(seqnames = names(genome), ranges = IRanges(start = 1, end =
 plot_dir <- "../plots/elai_tr"
 
 
-
+## format plot
 pp1 <- getDefaultPlotParams(plot.type=6)
 pp1$data1height <- 5
 pp1$data2height <- 5
